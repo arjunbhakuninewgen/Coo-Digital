@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useToast } from "@/hooks/use-toast";
-import { Mail, Phone, Briefcase, Calendar, X, Loader2, Check } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+import { X, Mail, Phone, Briefcase, Calendar, Check, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -16,183 +16,192 @@ const EmployeeProfile = () => {
   const { toast } = useToast();
   const [skills, setSkills] = useState<string[]>([]);
   const [newSkill, setNewSkill] = useState("");
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditingSkills, setIsEditingSkills] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const fetchSkills = async () => {
-  if (!user) return;
-  setLoading(true);
+  // ✅ Fetch user's skills from Supabase
+  const fetchUserSkills = async () => {
+    if (!user) return;
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("employee_skills")
+        .select("skills(name)")
+        .eq("employee_id", user.id);
 
-  const { data, error } = await supabase
-    .from("employee_skills")
-    .select("skills(name)")
-    .eq("employee_id", user.id);
+      if (error) throw error;
 
-  if (error) {
-    toast({
-      title: "Error fetching skills",
-      description: error.message,
-      variant: "destructive",
-    });
-  } else {
-    setSkills(data.map((s: any) => s.skills.name));
-  }
-  setLoading(false);
-};
+      const skillNames = data?.map((d: any) => d.skills?.name).filter(Boolean) || [];
+      setSkills(skillNames);
+    } catch (err: any) {
+      toast({
+        title: "Error fetching skills",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    fetchSkills();
+    fetchUserSkills();
   }, [user]);
 
+  // ✅ Add skill via Edge Function
   const handleAddSkill = async () => {
-  if (!newSkill.trim() || !user) return;
-  const skillName = newSkill.trim();
+    if (!newSkill.trim() || !user) return;
+    const trimmed = newSkill.trim();
 
-  try {
-    setSaving(true);
-
-    // 1️⃣ Find or create skill
-    let { data: existingSkill } = await supabase
-      .from("skills")
-      .select("id")
-      .eq("name", skillName)
-      .single();
-
-    if (!existingSkill) {
-      const { data: newSkillRow, error: skillInsertError } = await supabase
+    try {
+      // 1️⃣ Find skill_id
+      const { data: skillData, error: skillError } = await supabase
         .from("skills")
-        .insert([{ name: skillName }])
-        .select()
-        .single();
+        .select("id")
+        .eq("name", trimmed)
+        .maybeSingle();
+      if (skillError) throw skillError;
+      let skillId = skillData?.id;
 
-      if (skillInsertError) throw skillInsertError;
-      existingSkill = newSkillRow;
+      // 2️⃣ Create skill if not found
+      if (!skillId) {
+        const { data: newSkillData, error: createError } = await supabase
+          .from("skills")
+          .insert([{ name: trimmed }])
+          .select()
+          .single();
+        if (createError) throw createError;
+        skillId = newSkillData.id;
+      }
+
+      // 3️⃣ Assign skill via Edge Function
+      const { error: assignError } = await supabase.functions.invoke("assign-skill", {
+        body: {
+          employee_id: user.id,
+          skill_id: skillId,
+          proficiency_level: null,
+        },
+      });
+      if (assignError) throw assignError;
+
+      setSkills((prev) => [...prev, trimmed]);
+      setNewSkill("");
+      toast({ title: "Skill added", description: `${trimmed} added successfully.` });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
+  };
 
-    // 2️⃣ Link in employee_skills
-    const { error: linkError } = await supabase
-      .from("employee_skills")
-      .insert([{ employee_id: user.id, skill_id: existingSkill.id }]);
+  // ✅ Remove skill
+  const handleRemoveSkill = async (skill: string) => {
+    if (!user) return;
+    try {
+      const { data: skillData, error: skillError } = await supabase
+        .from("skills")
+        .select("id")
+        .eq("name", skill)
+        .maybeSingle();
+      if (skillError) throw skillError;
+      if (!skillData?.id) throw new Error("Skill not found");
 
-    if (linkError) throw linkError;
+      const { error: deleteError } = await supabase
+        .from("employee_skills")
+        .delete()
+        .eq("employee_id", user.id)
+        .eq("skill_id", skillData.id);
+      if (deleteError) throw deleteError;
 
-    setSkills([...skills, skillName]);
-    setNewSkill("");
-    toast({ title: "✅ Skill added", description: `${skillName} linked successfully.` });
-  } catch (err: any) {
-    toast({ title: "Error adding skill", description: err.message, variant: "destructive" });
-  } finally {
-    setSaving(false);
-  }
-};
+      setSkills((prev) => prev.filter((s) => s !== skill));
+      toast({ title: "Skill removed", description: `${skill} removed.` });
+    } catch (err: any) {
+      toast({ title: "Error removing skill", description: err.message, variant: "destructive" });
+    }
+  };
 
-
- const handleRemoveSkill = async (skill: string) => {
-  if (!user) return;
-
-  const { error } = await (supabase as any)
-    .from("employee_skills")
-    .delete()
-    .eq("employee_id", user.id)
-    .eq("skill_name", skill);
-
-  if (error) {
+  // ✅ Save skills (UI only since each action updates Supabase)
+  const handleSaveSkills = () => {
+    setIsEditingSkills(false);
     toast({
-      title: "Error removing skill",
-      description: error.message,
-      variant: "destructive",
+      title: "Skills Updated",
+      description: "All changes have been saved successfully.",
     });
-  } else {
-    setSkills(skills.filter((s) => s !== skill));
-    toast({ title: "Removed", description: `${skill} removed.` });
-  }
-};
+  };
 
   return (
     <DashboardLayout title="My Profile">
       <div className="grid gap-6 md:grid-cols-3">
+        {/* Profile Section */}
         <Card className="md:col-span-1">
           <CardHeader className="text-center">
-            <Avatar className="h-24 w-24 mx-auto">
-              <AvatarFallback>{user?.name?.[0] ?? "E"}</AvatarFallback>
-            </Avatar>
-            <CardTitle className="mt-2">{user?.name}</CardTitle>
-            <CardDescription>{user?.role ?? "Employee"}</CardDescription>
+            <div className="flex justify-center mb-4">
+              <Avatar className="h-24 w-24">
+                <AvatarFallback className="text-3xl">{user?.name?.charAt(0) || "E"}</AvatarFallback>
+              </Avatar>
+            </div>
+            <CardTitle>{user?.name || "Employee"}</CardTitle>
+            <CardDescription className="capitalize">{user?.role}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            {user?.email && (
-              <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-muted-foreground" /> {user.email}
-              </div>
-            )}
-            {user?.phone && (
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-muted-foreground" /> {user.phone}
-              </div>
-            )}
-            {user?.department && (
-              <div className="flex items-center gap-2">
-                <Briefcase className="h-4 w-4 text-muted-foreground" /> {user.department}
-              </div>
-            )}
-            {user?.joiningDate && (
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                Joined {format(new Date(user.joiningDate), "PPP")}
-              </div>
-            )}
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /><span>{user?.email}</span></div>
+            {user?.phone && (<div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /><span>{user.phone}</span></div>)}
+            {user?.department && (<div className="flex items-center gap-2"><Briefcase className="h-4 w-4 text-muted-foreground" /><span>{user.department}</span></div>)}
+            {user?.joiningDate && (<div className="flex items-center gap-2"><Calendar className="h-4 w-4 text-muted-foreground" /><span>Joined {format(new Date(user.joiningDate), "PPP")}</span></div>)}
           </CardContent>
         </Card>
 
+        {/* Skills Section */}
         <Card className="md:col-span-2">
-          <CardHeader className="flex justify-between items-center">
-            <div>
+          <CardHeader>
+            <div className="flex justify-between items-center">
               <CardTitle>Skills</CardTitle>
-              <CardDescription>Manage your skills below.</CardDescription>
+              {!isEditingSkills ? (
+                <Button onClick={() => setIsEditingSkills(true)} disabled={loading}>
+                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Edit Skills
+                </Button>
+              ) : (
+                <Button onClick={handleSaveSkills} variant="outline" disabled={saving}>
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}Save Changes
+                </Button>
+              )}
             </div>
-            <Button onClick={() => setIsEditing(!isEditing)} variant="outline">
-              {isEditing ? "Done" : "Edit Skills"}
-            </Button>
+            <CardDescription>Manage your professional skills</CardDescription>
           </CardHeader>
+
           <CardContent>
             {loading ? (
-              <div className="flex justify-center py-10">
-                <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
-              </div>
-            ) : isEditing ? (
-              <div className="space-y-4">
-                <div className="flex gap-2">
+              <div className="flex justify-center py-6 text-muted-foreground">Loading skills...</div>
+            ) : isEditingSkills ? (
+              <>
+                <div className="flex gap-2 mb-4">
                   <Input
-                    placeholder="Add skill"
+                    placeholder="Add new skill..."
                     value={newSkill}
                     onChange={(e) => setNewSkill(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleAddSkill()}
                   />
-                  <Button onClick={handleAddSkill} disabled={saving}>
-                    {saving ? <Loader2 className="animate-spin h-4 w-4" /> : <Check className="h-4 w-4" />}
-                  </Button>
+                  <Button onClick={handleAddSkill}>Add</Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {skills.map((skill) => (
-                    <Badge key={skill} variant="secondary" className="pl-3 pr-2 py-1">
+                  {skills.map((skill, i) => (
+                    <Badge key={i} variant="secondary" className="pl-3 pr-2 py-1.5">
                       {skill}
-                      <button onClick={() => handleRemoveSkill(skill)}>
-                        <X className="ml-1 h-3 w-3" />
+                      <button onClick={() => handleRemoveSkill(skill)} className="ml-1 hover:bg-muted rounded-full">
+                        <X className="h-3 w-3" />
                       </button>
                     </Badge>
                   ))}
+                  {skills.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No skills added yet.</p>
+                  )}
                 </div>
-              </div>
+              </>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {skills.length > 0 ? (
-                  skills.map((skill) => (
-                    <Badge key={skill} variant="secondary">
-                      {skill}
-                    </Badge>
-                  ))
-                ) : (
+                {skills.map((skill, i) => (
+                  <Badge key={i} variant="secondary">{skill}</Badge>
+                ))}
+                {skills.length === 0 && (
                   <p className="text-muted-foreground text-sm">No skills added yet.</p>
                 )}
               </div>
