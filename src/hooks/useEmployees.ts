@@ -14,7 +14,7 @@ export interface Employee {
   ctc: number;
   utilization: number;
   avatar?: string;
-  projects: string[];
+  projects: { id: string; name: string }[];
 }
 
 export const useEmployees = () => {
@@ -22,6 +22,7 @@ export const useEmployees = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ✅ Fetch employees with their profiles + assigned projects
   const fetchEmployees = async () => {
     try {
       setLoading(true);
@@ -29,12 +30,25 @@ export const useEmployees = () => {
 
       const { data, error } = await supabase
         .from("employees")
-        .select("*, profiles(name, email, phone, role)")
+        .select(`
+          id,
+          department,
+          job_role,
+          experience,
+          joining_date,
+          ctc,
+          utilization,
+          skills,
+          profiles ( name, email, phone, role ),
+          employee_projects (
+            projects ( id, name )
+          )
+        `)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
-      const formatted = data.map((emp: any) => ({
+      const formatted = (data || []).map((emp: any) => ({
         id: emp.id,
         name: emp.profiles?.name ?? "N/A",
         email: emp.profiles?.email ?? "N/A",
@@ -43,11 +57,15 @@ export const useEmployees = () => {
         role: emp.profiles?.role ?? emp.job_role ?? "Employee",
         joiningDate: emp.joining_date,
         experience: emp.experience ?? 0,
-        skills: emp.skills ?? [],
+        skills: Array.isArray(emp.skills) ? emp.skills : [],
         ctc: emp.ctc ?? 0,
         utilization: emp.utilization ?? 0,
-        avatar: emp.avatar ?? emp.name?.charAt(0)?.toUpperCase() ?? "E",
-        projects: emp.projects ?? [],
+        avatar: emp.profiles?.name?.charAt(0)?.toUpperCase() ?? "E",
+        projects:
+          emp.employee_projects?.map((p: any) => ({
+            id: p.projects?.id,
+            name: p.projects?.name,
+          })) || [],
       }));
 
       setEmployees(formatted);
@@ -58,6 +76,7 @@ export const useEmployees = () => {
     }
   };
 
+  // ✅ Add employee using edge function
   const addEmployee = async (data: any) => {
     try {
       const { data: res, error } = await supabase.functions.invoke("add-employee", {
@@ -71,6 +90,7 @@ export const useEmployees = () => {
     }
   };
 
+  // ✅ Edit employee details
   const editEmployee = async (id: string, updates: Partial<Employee>) => {
     try {
       const { error } = await supabase.from("employees").update(updates).eq("id", id);
@@ -86,5 +106,5 @@ export const useEmployees = () => {
     fetchEmployees();
   }, []);
 
-  return { employees, loading, error, addEmployee, editEmployee };
+  return { employees, loading, error, addEmployee, editEmployee, refetch: fetchEmployees };
 };
