@@ -54,6 +54,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useEmployees, Employee } from "@/hooks/useEmployees";
 import { EditEmployeeDialog } from "@/components/EditEmployeeDialog";
+import { AssignProjectForm } from "@/components/AssignProjectForm";
 
 // Department colors
 const departmentColors = {
@@ -597,38 +598,50 @@ const Employees = () => {
                 
                 {/* Employee Projects - Third Column */}
                 <Card>
-                  <CardHeader>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <CardTitle>Assigned Projects</CardTitle>
-                        <CardDescription>
-                          Currently assigned to {selectedEmployee.projects.length} project(s)
-                        </CardDescription>
-                      </div>
-                      <Button size="sm">
-                        <span>Add Project</span>
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {selectedEmployee.projects.length > 0 ? (
-                      selectedEmployee.projects.map((project, index) => (
-                        <div key={index} className="border rounded-lg p-3 bg-card">
-                          <div className="flex justify-between items-start">
-                            <h4 className="font-medium">{project}</h4>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-muted-foreground text-sm">No projects assigned yet.</p>
-                    )}
-                  </CardContent>
-                  <CardFooter>
-                    <Button variant="outline" className="w-full">
-                      View Full Profile
-                    </Button>
-                  </CardFooter>
-                </Card>
+  <CardHeader>
+    <div className="flex justify-between items-center">
+      <div>
+        <CardTitle>Assigned Projects</CardTitle>
+        <CardDescription>
+          Currently assigned to {selectedEmployee.projects?.length || 0} project(s)
+        </CardDescription>
+      </div>
+
+      <Dialog>
+        <DialogTrigger asChild>
+          <Button size="sm">Add Project</Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Project</DialogTitle>
+            <DialogDescription>
+              Choose a project to assign to {selectedEmployee.name}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <AssignProjectForm employeeId={selectedEmployee.id} />
+        </DialogContent>
+      </Dialog>
+    </div>
+  </CardHeader>
+
+  <CardContent className="space-y-4">
+    {selectedEmployee.projects?.length > 0 ? (
+      selectedEmployee.projects.map((project, index) => (
+        <div key={index} className="border rounded-lg p-3 bg-card">
+          <h4 className="font-medium">{project}</h4>
+        </div>
+      ))
+    ) : (
+      <p className="text-muted-foreground text-sm">No projects assigned yet.</p>
+    )}
+  </CardContent>
+
+  <CardFooter>
+    <Button variant="outline" className="w-full">View Full Profile</Button>
+  </CardFooter>
+</Card>
+
               </>
             ) : (
               <Card className="col-span-2 flex items-center justify-center h-[50vh]">
