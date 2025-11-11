@@ -1,6 +1,5 @@
-
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface Employee {
   id: string;
@@ -12,195 +11,80 @@ export interface Employee {
   joiningDate: string;
   experience: number;
   skills: string[];
+  ctc: number;
   utilization: number;
-  ctc?: number;
+  avatar?: string;
   projects: string[];
-  avatar: string;
 }
 
 export const useEmployees = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, isAuthenticated } = useAuth();
 
-const fetchEmployees = async () => {
-  if (!user) return;
+  const fetchEmployees = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-  try {
-    setLoading(true);
-    setError(null);
+      const { data, error } = await supabase
+        .from("employees")
+        .select("*, profiles(name, email, phone, role)")
+        .order("created_at", { ascending: false });
 
-    // Static demo employees
-    const formattedEmployees: Employee[] = [
-      {
-        id: 'e-1',
-        name: 'Aarav Sharma',
-        email: 'aarav.sharma@agency.com',
-        phone: '+91 98765 43210',
-        department: 'Development',
-        role: 'Frontend Developer',
-        joiningDate: '2023-06-12',
-        experience: 3,
-        skills: ['React', 'TypeScript', 'Tailwind CSS'],
-        utilization: 72,
-        ctc: 850000,
-        projects: ['Website Redesign', 'Mobile App'],
-        avatar: 'AS'
-      },
-      {
-        id: 'e-2',
-        name: 'Neha Verma',
-        email: 'neha.verma@agency.com',
-        phone: '+91 98765 76543',
-        department: 'Social',
-        role: 'Social Media Manager',
-        joiningDate: '2022-02-18',
-        experience: 5,
-        skills: ['Content Strategy', 'Analytics', 'Canva'],
-        utilization: 64,
-        ctc: 900000,
-        projects: ['Brand Campaign', 'Influencer Outreach'],
-        avatar: 'NV'
-      },
-      {
-        id: 'e-3',
-        name: 'Rohit Gupta',
-        email: 'rohit.gupta@agency.com',
-        phone: '+91 99887 77665',
-        department: 'Performance',
-        role: 'Performance Marketer',
-        joiningDate: '2021-11-03',
-        experience: 4,
-        skills: ['Google Ads', 'Facebook Ads', 'A/B Testing'],
-        utilization: 58,
-        ctc: 780000,
-        projects: ['E-commerce Funnel'],
-        avatar: 'RG'
-      },
-      {
-        id: 'e-4',
-        name: 'Priya Singh',
-        email: 'priya.singh@agency.com',
-        phone: '+91 91234 56789',
-        department: 'Maintenance',
-        role: 'DevOps Engineer',
-        joiningDate: '2020-08-24',
-        experience: 6,
-        skills: ['AWS', 'Docker', 'CI/CD'],
-        utilization: 81,
-        ctc: 1200000,
-        projects: ['Infrastructure Revamp'],
-        avatar: 'PS'
-      }
-    ];
+      if (error) throw error;
 
-    setEmployees(formattedEmployees);
-  } catch (err) {
-    console.error('Error fetching employees:', err);
-    setError(err instanceof Error ? err.message : 'Failed to fetch employees');
-  } finally {
-    setLoading(false);
-  }
-};
+      const formatted = data.map((emp: any) => ({
+        id: emp.id,
+        name: emp.profiles?.name ?? "N/A",
+        email: emp.profiles?.email ?? "N/A",
+        phone: emp.profiles?.phone ?? "",
+        department: emp.department ?? "Development",
+        role: emp.profiles?.role ?? emp.job_role ?? "Employee",
+        joiningDate: emp.joining_date,
+        experience: emp.experience ?? 0,
+        skills: emp.skills ?? [],
+        ctc: emp.ctc ?? 0,
+        utilization: emp.utilization ?? 0,
+        avatar: emp.avatar ?? emp.name?.charAt(0)?.toUpperCase() ?? "E",
+        projects: emp.projects ?? [],
+      }));
 
-const addEmployee = async (employeeData: {
-  name?: string;
-  email?: string;
-  phone?: string;
-  department?: "Maintenance" | "Development" | "Social" | "Performance";
-  role?: string;
-  joiningDate?: string;
-  experience?: number;
-  skills: string[];
-  ctc?: number;
-}) => {
-  try {
-    // Validate required fields
-    if (!employeeData.name || !employeeData.email || !employeeData.phone || 
-        !employeeData.department || !employeeData.role || !employeeData.joiningDate ||
-        employeeData.experience === undefined || !employeeData.ctc) {
-      return { success: false, error: 'All fields are required' };
+      setEmployees(formatted);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const employeeId = crypto.randomUUID();
+  const addEmployee = async (data: any) => {
+    try {
+      const { data: res, error } = await supabase.functions.invoke("add-employee", {
+        body: data,
+      });
+      if (error) throw error;
+      await fetchEmployees();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  };
 
-    const newEmployee: Employee = {
-      id: employeeId,
-      name: employeeData.name,
-      email: employeeData.email,
-      phone: employeeData.phone,
-      department: employeeData.department,
-      role: employeeData.role,
-      joiningDate: employeeData.joiningDate,
-      experience: employeeData.experience ?? 0,
-      skills: employeeData.skills,
-      utilization: 0,
-      ctc: employeeData.ctc,
-      projects: [],
-      avatar: employeeData.name.split(' ').map(n => n[0]).join('').toUpperCase(),
-    } as Employee;
-
-    setEmployees(prev => [...prev, newEmployee]);
-
-    return { success: true };
-  } catch (err) {
-    console.error('Error adding employee:', err);
-    return { success: false, error: err instanceof Error ? err.message : 'Failed to add employee' };
-  }
-};
-
-const editEmployee = async (employeeId: string, employeeData: {
-  name: string;
-  email: string;
-  phone: string;
-  department: "Maintenance" | "Development" | "Social" | "Performance";
-  role: string;
-  joiningDate: string;
-  experience: number;
-  skills: string;
-  ctc: number;
-}) => {
-  try {
-    const skillsArray = employeeData.skills.split(',').map(s => s.trim()).filter(Boolean);
-
-    setEmployees(prev => prev.map(emp =>
-      emp.id === employeeId
-        ? {
-            ...emp,
-            name: employeeData.name,
-            email: employeeData.email,
-            phone: employeeData.phone,
-            department: employeeData.department,
-            role: employeeData.role,
-            joiningDate: employeeData.joiningDate,
-            experience: employeeData.experience,
-            ctc: employeeData.ctc,
-            avatar: employeeData.name.split(' ').map(n => n[0]).join('').toUpperCase(),
-            skills: skillsArray,
-          }
-        : emp
-    ));
-
-    return { success: true };
-  } catch (err) {
-    console.error('Error editing employee:', err);
-    return { success: false, error: err instanceof Error ? err.message : 'Failed to update employee' };
-  }
-};
+  const editEmployee = async (id: string, updates: Partial<Employee>) => {
+    try {
+      const { error } = await supabase.from("employees").update(updates).eq("id", id);
+      if (error) throw error;
+      await fetchEmployees();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  };
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchEmployees();
-    }
-  }, [user, isAuthenticated]);
+    fetchEmployees();
+  }, []);
 
-  return {
-    employees,
-    loading,
-    error,
-    fetchEmployees,
-    addEmployee,
-    editEmployee,
-  };
+  return { employees, loading, error, addEmployee, editEmployee };
 };
