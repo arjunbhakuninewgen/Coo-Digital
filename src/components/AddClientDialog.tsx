@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -9,6 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "./ui/input";
 import { toast } from "./ui/sonner";
 import { UserPlus } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const clientSchema = z.object({
   name: z.string().min(2, { message: "Company name must be at least 2 characters." }),
@@ -20,7 +20,11 @@ const clientSchema = z.object({
 
 type ClientFormValues = z.infer<typeof clientSchema>;
 
-export default function AddClientDialog() {
+interface AddClientDialogProps {
+  onClientAdded?: () => Promise<void>; // ✅ prop added
+}
+
+export default function AddClientDialog({ onClientAdded }: AddClientDialogProps) {
   const [open, setOpen] = useState(false);
   
   const form = useForm<ClientFormValues>({
@@ -34,17 +38,35 @@ export default function AddClientDialog() {
     },
   });
 
-  function onSubmit(data: ClientFormValues) {
-    // In a real app, this would add the client to the database
-    console.log("New client data:", data);
-    
-    toast.success("Client added successfully", {
-      description: `${data.name} has been added to your clients.`,
-    });
-    
-    setOpen(false);
-    form.reset();
-  }
+  const onSubmit = async (data: ClientFormValues) => {
+    try {
+      const payload = {
+        name: data.name,
+        contact_person: data.contactPerson,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+      };
+
+      // ✅ Call your deployed Supabase Edge Function (e.g., add-client)
+      const { data: result, error } = await supabase.functions.invoke("add-client", {
+        body: payload,
+      });
+
+      if (error) throw error;
+
+      toast.success("Client added successfully", {
+        description: `${data.name} has been added to your clients.`,
+      });
+
+      setOpen(false);
+      form.reset();
+
+      if (onClientAdded) await onClientAdded(); // ✅ refresh parent
+    } catch (e: any) {
+      toast.error("Failed to add client", { description: e.message });
+    }
+  };
 
   return (
     <>

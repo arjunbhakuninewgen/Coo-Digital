@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -10,6 +9,7 @@ import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { toast } from "./ui/sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const feedbackSchema = z.object({
   project: z.string().min(1, { message: "Project name is required." }),
@@ -24,11 +24,12 @@ type FeedbackFormValues = z.infer<typeof feedbackSchema>;
 interface AddFeedbackDialogProps {
   clientId: string;
   clientName: string;
+  onAdded?: () => Promise<void>; // ✅ Add refresh callback
 }
 
-export default function AddFeedbackDialog({ clientId, clientName }: AddFeedbackDialogProps) {
+export default function AddFeedbackDialog({ clientId, clientName, onAdded }: AddFeedbackDialogProps) {
   const [open, setOpen] = useState(false);
-  
+
   const form = useForm<FeedbackFormValues>({
     resolver: zodResolver(feedbackSchema),
     defaultValues: {
@@ -38,24 +39,41 @@ export default function AddFeedbackDialog({ clientId, clientName }: AddFeedbackD
     },
   });
 
-  function onSubmit(data: FeedbackFormValues) {
-    // In a real app, this would add the feedback to the database
-    console.log("New feedback data:", { ...data, clientId });
-    
-    toast.success("Feedback added successfully", {
-      description: `Feedback for ${clientName} has been recorded.`,
-    });
-    
-    setOpen(false);
-    form.reset();
-  }
+  const onSubmit = async (data: FeedbackFormValues) => {
+    try {
+      const payload = {
+        client_id: clientId,
+        project: data.project,
+        text: data.text,
+        sentiment: data.sentiment,
+      };
+
+      // ✅ Call Supabase Edge Function
+      const { data: result, error } = await supabase.functions.invoke("add-feedback", {
+        body: payload,
+      });
+
+      if (error) throw error;
+
+      toast.success("Feedback added successfully", {
+        description: `Feedback for ${clientName} recorded.`,
+      });
+
+      setOpen(false);
+      form.reset();
+
+      if (onAdded) await onAdded(); // ✅ refresh parent
+    } catch (e: any) {
+      toast.error("Failed to add feedback", { description: e.message });
+    }
+  };
 
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
         Add Feedback
       </Button>
-      
+
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
@@ -64,9 +82,10 @@ export default function AddFeedbackDialog({ clientId, clientName }: AddFeedbackD
               Record feedback from {clientName}. Click save when you're done.
             </DialogDescription>
           </DialogHeader>
-          
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              {/* Project Field */}
               <FormField
                 control={form.control}
                 name="project"
@@ -80,7 +99,8 @@ export default function AddFeedbackDialog({ clientId, clientName }: AddFeedbackD
                   </FormItem>
                 )}
               />
-              
+
+              {/* Sentiment Field */}
               <FormField
                 control={form.control}
                 name="sentiment"
@@ -103,7 +123,8 @@ export default function AddFeedbackDialog({ clientId, clientName }: AddFeedbackD
                   </FormItem>
                 )}
               />
-              
+
+              {/* Feedback Field */}
               <FormField
                 control={form.control}
                 name="text"
@@ -111,17 +132,17 @@ export default function AddFeedbackDialog({ clientId, clientName }: AddFeedbackD
                   <FormItem>
                     <FormLabel>Feedback</FormLabel>
                     <FormControl>
-                      <Textarea 
-                        placeholder="Enter client feedback..." 
-                        className="min-h-[100px]" 
-                        {...field} 
+                      <Textarea
+                        placeholder="Enter client feedback..."
+                        className="min-h-[100px]"
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              
+
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                   Cancel
