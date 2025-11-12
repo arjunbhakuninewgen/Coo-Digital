@@ -1,3 +1,4 @@
+// pages/Employees.tsx
 import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
@@ -100,25 +101,20 @@ const employeeFormSchema = z.object({
     .number()
     .nonnegative({ message: "Experience must be a positive number." }),
   skills: z.string().min(2, { message: "Please enter at least one skill." }),
-  ctc: z.coerce
-    .number()
-    .positive({ message: "CTC must be a positive number." }),
+  ctc: z.coerce.number().positive({ message: "CTC must be a positive number." }),
 });
 
 type EmployeeFormValues = z.infer<typeof employeeFormSchema>;
 
 const Employees = () => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
-    null
-  );
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [departmentFilter, setDepartmentFilter] = useState<string | null>(null);
   const [openAddDialog, setOpenAddDialog] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const { toast } = useToast();
-  const { employees, loading, error, addEmployee, editEmployee } =
-    useEmployees();
+  const { employees, loading, error, addEmployee, editEmployee } = useEmployees();
 
   // React Hook Form
   const form = useForm<EmployeeFormValues>({
@@ -138,16 +134,14 @@ const Employees = () => {
 
   // Filter employees based on search and department filter
   const filteredEmployees = employees.filter((employee) => {
+    const q = searchQuery.trim().toLowerCase();
     const matchesSearch =
-      employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.skills.some((skill) =>
-        skill.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      !q ||
+      employee.name.toLowerCase().includes(q) ||
+      employee.role.toLowerCase().includes(q) ||
+      employee.skills.some((skill) => skill.toLowerCase().includes(q));
     const matchesDepartment =
-      !departmentFilter ||
-      departmentFilter === "all" ||
-      employee.department === departmentFilter;
+      !departmentFilter || departmentFilter === "all" || employee.department === departmentFilter;
 
     return matchesSearch && matchesDepartment;
   });
@@ -161,55 +155,38 @@ const Employees = () => {
     }).format(amount);
   };
 
-  // Calculate department statistics
+  // Calculate department statistics (left unchanged)
   const getDepartmentStats = () => {
     const departments = ["Maintenance", "Development", "Social", "Performance"];
-    const stats = departments.map((dept) => {
+    return departments.map((dept) => {
       const deptEmployees = employees.filter((e) => e.department === dept);
       return {
         name: dept,
         value: deptEmployees.length,
         color: departmentColors[dept as keyof typeof departmentColors],
-        avgUtilization:
-          deptEmployees.length > 0
-            ? deptEmployees.reduce((acc, e) => acc + e.utilization, 0) /
-              deptEmployees.length
-            : 0,
+        avgUtilization: deptEmployees.length > 0 ? deptEmployees.reduce((acc, e) => acc + e.utilization, 0) / deptEmployees.length : 0,
       };
     });
-    return stats;
   };
 
   const departmentStats = getDepartmentStats();
 
-  // Calculate experience distribution
-  const getExperienceData = () => {
-    return [
-      {
-        name: "0-2 years",
-        value: employees.filter((e) => e.experience <= 2).length,
-      },
-      {
-        name: "3-5 years",
-        value: employees.filter((e) => e.experience > 2 && e.experience <= 5)
-          .length,
-      },
-      {
-        name: "6+ years",
-        value: employees.filter((e) => e.experience > 5).length,
-      },
-    ];
-  };
-
-  const experienceData = getExperienceData();
-  const experienceColors = ["#0ea5e9", "#8b5cf6", "#22c55e"];
-
   // Handle form submission for adding a new employee
   async function onSubmit(data: EmployeeFormValues) {
-    const result = await addEmployee({
-      ...data,
-      skills: data.skills.split(",").map((s) => s.trim()),
-    });
+    // Prepare payload matching your edge function expectations
+    const payload = {
+      name: data.name,
+      email: data.email,
+      phone: data.phone || null,
+      department: data.department,
+      role: data.role,
+      joining_date: data.joiningDate,
+      experience: data.experience,
+      skills: data.skills.split(",").map((s) => s.trim()).filter(Boolean),
+      ctc: data.ctc,
+    };
+
+    const result = await addEmployee(payload);
 
     if (result.success) {
       toast({
@@ -228,6 +205,7 @@ const Employees = () => {
   }
 
   // Handle editing an employee
+    // Handle editing an employee
   const handleEditEmployee = async (employeeId: string, data: any) => {
     const result = await editEmployee(employeeId, data);
 
@@ -246,6 +224,44 @@ const Employees = () => {
       return { success: false, error: result.error };
     }
   };
+
+  // ✅ FIX: Experience Distribution Data (prevents ReferenceError)
+  const experienceRanges = [
+    { label: "0-1 yrs", min: 0, max: 1 },
+    { label: "1-3 yrs", min: 1, max: 3 },
+    { label: "3-5 yrs", min: 3, max: 5 },
+    { label: "5-8 yrs", min: 5, max: 8 },
+    { label: "8+ yrs", min: 8, max: Infinity },
+  ];
+
+  const experienceData = experienceRanges.map((range) => ({
+    name: range.label,
+    value: employees.filter(
+      (e) => e.experience >= range.min && e.experience < range.max
+    ).length,
+  }));
+
+  // Optional: custom colors for clarity
+  const experienceColors = [
+    "#22c55e", // green for freshers
+    "#0ea5e9", // blue for junior
+    "#8b5cf6", // purple for mid-level
+    "#f97316", // orange for senior
+    "#ef4444", // red for expert
+  ];
+
+  // Optional: handle no data gracefully
+  const totalExperienceCount = experienceData.reduce(
+    (acc, curr) => acc + curr.value,
+    0
+  );
+
+  if (totalExperienceCount === 0) {
+    console.warn("No experience data found — chart will render empty");
+  }
+
+  // ✅ End of fix section
+
 
   if (loading) {
     return (
@@ -282,10 +298,8 @@ const Employees = () => {
           <TabsTrigger value="skills">Skills Matrix</TabsTrigger>
         </TabsList>
 
-        {/* Employees Tab */}
         <TabsContent value="employees" className="mt-4">
           <div className="grid gap-4 lg:grid-cols-3">
-            {/* Employee List - First Column */}
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row gap-2">
                 <div className="relative flex-1">
@@ -298,10 +312,7 @@ const Employees = () => {
                   />
                 </div>
 
-                <Select
-                  value={departmentFilter || undefined}
-                  onValueChange={setDepartmentFilter}
-                >
+                <Select value={departmentFilter || undefined} onValueChange={setDepartmentFilter}>
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="All Departments" />
                   </SelectTrigger>
@@ -319,9 +330,8 @@ const Employees = () => {
               </div>
 
               <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold">
-                  Employee List ({filteredEmployees.length})
-                </h3>
+                <h3 className="text-lg font-semibold">Employee List ({filteredEmployees.length})</h3>
+
                 <Dialog open={openAddDialog} onOpenChange={setOpenAddDialog}>
                   <DialogTrigger asChild>
                     <Button size="sm" className="flex items-center gap-1">
@@ -329,19 +339,17 @@ const Employees = () => {
                       <span>Add Employee</span>
                     </Button>
                   </DialogTrigger>
+
                   <DialogContent className="sm:max-w-[525px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Add New Employee</DialogTitle>
                       <DialogDescription>
-                        Fill in the details below to add a new employee to the
-                        system.
+                        Fill in the details below to add a new employee to the system.
                       </DialogDescription>
                     </DialogHeader>
+
                     <Form {...form}>
-                      <form
-                        onSubmit={form.handleSubmit(onSubmit)}
-                        className="space-y-4 py-4"
-                      >
+                      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <FormField
                             control={form.control}
@@ -363,10 +371,7 @@ const Employees = () => {
                               <FormItem>
                                 <FormLabel>Email</FormLabel>
                                 <FormControl>
-                                  <Input
-                                    placeholder="john@example.com"
-                                    {...field}
-                                  />
+                                  <Input placeholder="john@example.com" {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -379,10 +384,7 @@ const Employees = () => {
                               <FormItem>
                                 <FormLabel>Phone Number</FormLabel>
                                 <FormControl>
-                                  <Input
-                                    placeholder="+91 9876543210"
-                                    {...field}
-                                  />
+                                  <Input placeholder="+91 9876543210" {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -395,26 +397,15 @@ const Employees = () => {
                               <FormItem>
                                 <FormLabel>Department</FormLabel>
                                 <FormControl>
-                                  <Select
-                                    onValueChange={field.onChange}
-                                    defaultValue={field.value}
-                                  >
+                                  <Select onValueChange={field.onChange} defaultValue={field.value}>
                                     <SelectTrigger>
                                       <SelectValue placeholder="Select department" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="Development">
-                                        Development
-                                      </SelectItem>
-                                      <SelectItem value="Maintenance">
-                                        Maintenance
-                                      </SelectItem>
-                                      <SelectItem value="Social">
-                                        Social
-                                      </SelectItem>
-                                      <SelectItem value="Performance">
-                                        Performance
-                                      </SelectItem>
+                                      <SelectItem value="Development">Development</SelectItem>
+                                      <SelectItem value="Maintenance">Maintenance</SelectItem>
+                                      <SelectItem value="Social">Social</SelectItem>
+                                      <SelectItem value="Performance">Performance</SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </FormControl>
@@ -429,10 +420,7 @@ const Employees = () => {
                               <FormItem>
                                 <FormLabel>Job Role</FormLabel>
                                 <FormControl>
-                                  <Input
-                                    placeholder="Frontend Developer"
-                                    {...field}
-                                  />
+                                  <Input placeholder="Frontend Developer" {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -458,12 +446,7 @@ const Employees = () => {
                               <FormItem>
                                 <FormLabel>Experience (Years)</FormLabel>
                                 <FormControl>
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    step="0.5"
-                                    {...field}
-                                  />
+                                  <Input type="number" min="0" step="0.5" {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -476,18 +459,14 @@ const Employees = () => {
                               <FormItem>
                                 <FormLabel>CTC (INR)</FormLabel>
                                 <FormControl>
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    step="50000"
-                                    {...field}
-                                  />
+                                  <Input type="number" min="0" step="50000" {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
                         </div>
+
                         <FormField
                           control={form.control}
                           name="skills"
@@ -495,25 +474,16 @@ const Employees = () => {
                             <FormItem>
                               <FormLabel>Skills (Comma Separated)</FormLabel>
                               <FormControl>
-                                <Input
-                                  placeholder="React, JavaScript, TypeScript"
-                                  {...field}
-                                />
+                                <Input placeholder="React, JavaScript, TypeScript" {...field} />
                               </FormControl>
-                              <FormDescription>
-                                Enter skills separated by commas (e.g., React,
-                                TypeScript, UI/UX).
-                              </FormDescription>
+                              <FormDescription>Enter skills separated by commas (e.g., React, TypeScript, UI/UX).</FormDescription>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
+
                         <DialogFooter>
-                          <Button
-                            variant="outline"
-                            onClick={() => setOpenAddDialog(false)}
-                            type="button"
-                          >
+                          <Button variant="outline" onClick={() => setOpenAddDialog(false)} type="button">
                             Cancel
                           </Button>
                           <Button type="submit">Add Employee</Button>
@@ -529,49 +499,31 @@ const Employees = () => {
                   filteredEmployees.map((employee) => (
                     <Card
                       key={employee.id}
-                      className={`cursor-pointer hover:border-primary transition-colors ${
-                        selectedEmployee?.id === employee.id
-                          ? "border-primary bg-primary/5"
-                          : ""
-                      }`}
+                      className={`cursor-pointer hover:border-primary transition-colors ${selectedEmployee?.id === employee.id ? "border-primary bg-primary/5" : ""}`}
                       onClick={() => setSelectedEmployee(employee)}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-center gap-3">
                           <Avatar>
-                            <AvatarFallback>{employee.avatar}</AvatarFallback>
+                            <AvatarFallback>{employee.avatar ?? employee.name?.charAt(0)}</AvatarFallback>
                           </Avatar>
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-center">
-                              <h4 className="font-medium truncate">
-                                {employee.name}
-                              </h4>
+                              <h4 className="font-medium truncate">{employee.name}</h4>
                               <div className="flex items-center gap-1">
                                 <Badge
                                   className={`bg-opacity-20 text-opacity-100`}
                                   style={{
-                                    backgroundColor: `${
-                                      departmentColors[employee.department]
-                                    }20`,
-                                    color:
-                                      departmentColors[employee.department],
-                                    borderColor: `${
-                                      departmentColors[employee.department]
-                                    }40`,
+                                    backgroundColor: `${departmentColors[employee.department]}20`,
+                                    color: departmentColors[employee.department],
+                                    borderColor: `${departmentColors[employee.department]}40`,
                                   }}
                                 >
                                   {employee.department}
                                 </Badge>
                                 <DropdownMenu>
-                                  <DropdownMenuTrigger
-                                    asChild
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 w-6 p-0"
-                                    >
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={(e) => e.stopPropagation()}>
                                       <MoreVertical className="h-3 w-3" />
                                     </Button>
                                   </DropdownMenuTrigger>
@@ -590,9 +542,7 @@ const Employees = () => {
                                 </DropdownMenu>
                               </div>
                             </div>
-                            <p className="text-sm text-muted-foreground truncate">
-                              {employee.role}
-                            </p>
+                            <p className="text-sm text-muted-foreground truncate">{employee.role}</p>
                           </div>
                         </div>
                       </CardContent>
@@ -606,38 +556,29 @@ const Employees = () => {
               </div>
             </div>
 
-            {/* Employee Details - Second & Third Column */}
+            {/* Employee Details */}
             {selectedEmployee ? (
               <>
-                {/* Employee Profile - Second Column */}
+                {/* Profile */}
                 <Card className="h-fit">
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div className="flex items-center gap-3">
                         <Avatar className="h-12 w-12">
-                          <AvatarFallback>
-                            {selectedEmployee.avatar}
-                          </AvatarFallback>
+                          <AvatarFallback>{selectedEmployee.avatar}</AvatarFallback>
                         </Avatar>
                         <div>
                           <CardTitle>{selectedEmployee.name}</CardTitle>
-                          <CardDescription>
-                            {selectedEmployee.role}
-                          </CardDescription>
+                          <CardDescription>{selectedEmployee.role}</CardDescription>
                         </div>
                       </div>
                       <div className="flex flex-col gap-2">
                         <Badge
                           className={`bg-opacity-20 text-opacity-100`}
                           style={{
-                            backgroundColor: `${
-                              departmentColors[selectedEmployee.department]
-                            }20`,
-                            color:
-                              departmentColors[selectedEmployee.department],
-                            borderColor: `${
-                              departmentColors[selectedEmployee.department]
-                            }40`,
+                            backgroundColor: `${departmentColors[selectedEmployee.department]}20`,
+                            color: departmentColors[selectedEmployee.department],
+                            borderColor: `${departmentColors[selectedEmployee.department]}40`,
                           }}
                         >
                           {selectedEmployee.department}
@@ -658,54 +599,21 @@ const Employees = () => {
                       </div>
                     </div>
                   </CardHeader>
+
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-muted-foreground" />
-                        <span>{selectedEmployee.email}</span>
-                      </div>
-                      {selectedEmployee.phone && (
-                        <div className="flex items-center gap-2">
-                          <Phone className="h-4 w-4 text-muted-foreground" />
-                          <span>{selectedEmployee.phone}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span>
-                          Joined on{" "}
-                          {new Date(
-                            selectedEmployee.joiningDate
-                          ).toLocaleDateString("en-IN")}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span>
-                          {selectedEmployee.experience} years experience
-                        </span>
-                      </div>
-                      {selectedEmployee.ctc && (
-                        <div className="flex items-center gap-2">
-                          <BadgeIndianRupee className="h-4 w-4 text-muted-foreground" />
-                          <span>
-                            CTC: {formatCurrency(selectedEmployee.ctc)}
-                          </span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /><span>{selectedEmployee.email}</span></div>
+                      {selectedEmployee.phone && <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /><span>{selectedEmployee.phone}</span></div>}
+                      <div className="flex items-center gap-2"><Calendar className="h-4 w-4 text-muted-foreground" /><span>Joined on {new Date(selectedEmployee.joiningDate).toLocaleDateString('en-IN')}</span></div>
+                      <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-muted-foreground" /><span>{selectedEmployee.experience} years experience</span></div>
+                      {selectedEmployee.ctc ? <div className="flex items-center gap-2"><BadgeIndianRupee className="h-4 w-4 text-muted-foreground" /><span>CTC: {formatCurrency(selectedEmployee.ctc)}</span></div> : null}
                     </div>
 
                     <div>
                       <h4 className="font-semibold text-sm mb-2">Skills</h4>
                       <div className="flex flex-wrap gap-1">
                         {selectedEmployee.skills.map((skill, index) => (
-                          <Badge
-                            key={index}
-                            variant="secondary"
-                            className="bg-muted"
-                          >
-                            {skill}
-                          </Badge>
+                          <Badge key={index} variant="secondary" className="bg-muted">{skill}</Badge>
                         ))}
                       </div>
                     </div>
@@ -715,31 +623,18 @@ const Employees = () => {
                         <span>Utilization</span>
                         <span>{selectedEmployee.utilization}%</span>
                       </div>
-                      <Progress
-                        value={selectedEmployee.utilization}
-                        className={cn(
-                          "h-2",
-                          selectedEmployee.utilization >= 80
-                            ? "bg-green-500"
-                            : selectedEmployee.utilization >= 60
-                            ? "bg-amber-500"
-                            : "bg-red-500"
-                        )}
-                      />
+                      <Progress value={selectedEmployee.utilization} className={cn("h-2", selectedEmployee.utilization >= 80 ? "bg-green-500" : selectedEmployee.utilization >= 60 ? "bg-amber-500" : "bg-red-500")} />
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* Employee Projects - Third Column */}
+                {/* Projects */}
                 <Card>
                   <CardHeader>
                     <div className="flex justify-between items-center">
                       <div>
                         <CardTitle>Assigned Projects</CardTitle>
-                        <CardDescription>
-                          Currently assigned to{" "}
-                          {selectedEmployee.projects?.length || 0} project(s)
-                        </CardDescription>
+                        <CardDescription>Currently assigned to {selectedEmployee.projects?.length || 0} project(s)</CardDescription>
                       </div>
 
                       <Dialog>
@@ -749,10 +644,7 @@ const Employees = () => {
                         <DialogContent>
                           <DialogHeader>
                             <DialogTitle>Assign Project</DialogTitle>
-                            <DialogDescription>
-                              Choose a project to assign to{" "}
-                              {selectedEmployee.name}.
-                            </DialogDescription>
+                            <DialogDescription>Choose a project to assign to {selectedEmployee.name}.</DialogDescription>
                           </DialogHeader>
 
                           <AssignProjectForm employeeId={selectedEmployee.id} />
@@ -763,25 +655,18 @@ const Employees = () => {
 
                   <CardContent className="space-y-4">
                     {selectedEmployee.projects?.length > 0 ? (
-                      selectedEmployee.projects.map((project, index) => (
-                        <div
-                          key={index}
-                          className="border rounded-lg p-3 bg-card"
-                        >
+                      selectedEmployee.projects.map((project) => (
+                        <div key={project.id} className="border rounded-lg p-3 bg-card">
                           <h4 className="font-medium">{project.name}</h4>
                         </div>
                       ))
                     ) : (
-                      <p className="text-muted-foreground text-sm">
-                        No projects assigned yet.
-                      </p>
+                      <p className="text-muted-foreground text-sm">No projects assigned yet.</p>
                     )}
                   </CardContent>
 
                   <CardFooter>
-                    <Button variant="outline" className="w-full">
-                      View Full Profile
-                    </Button>
+                    <Button variant="outline" className="w-full">View Full Profile</Button>
                   </CardFooter>
                 </Card>
               </>
@@ -789,20 +674,15 @@ const Employees = () => {
               <Card className="col-span-2 flex items-center justify-center h-[50vh]">
                 <div className="text-center p-6">
                   <Users className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-xl font-medium mb-2">
-                    Select an Employee
-                  </h3>
-                  <p className="text-muted-foreground">
-                    Click on an employee from the list to view their details,
-                    skills, and assigned projects.
-                  </p>
+                  <h3 className="text-xl font-medium mb-2">Select an Employee</h3>
+                  <p className="text-muted-foreground">Click on an employee from the list to view their details, skills, and assigned projects.</p>
                 </div>
               </Card>
             )}
           </div>
         </TabsContent>
 
-        {/* Utilization Tab */}
+             {/* Utilization Tab */}
         <TabsContent value="utilization" className="mt-4">
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
@@ -1138,15 +1018,10 @@ const Employees = () => {
             </Card>
           </div>
         </TabsContent>
+
       </Tabs>
 
-      {/* Edit Employee Dialog */}
-      <EditEmployeeDialog
-        open={openEditDialog}
-        onOpenChange={setOpenEditDialog}
-        employee={editingEmployee}
-        onSave={handleEditEmployee}
-      />
+      <EditEmployeeDialog open={openEditDialog} onOpenChange={setOpenEditDialog} employee={editingEmployee} onSave={handleEditEmployee} />
     </DashboardLayout>
   );
 };
