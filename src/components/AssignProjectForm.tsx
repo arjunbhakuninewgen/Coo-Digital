@@ -5,11 +5,18 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 
-export const AssignProjectForm = ({ employeeId }: { employeeId: string }) => {
+export const AssignProjectForm = ({
+  employeeId,
+  onAssigned,
+}: {
+  employeeId: string;
+  onAssigned?: () => Promise<void> | void;
+}) => {
   const { toast } = useToast();
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState("");
   const [role, setRole] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -22,6 +29,7 @@ export const AssignProjectForm = ({ employeeId }: { employeeId: string }) => {
 
   const handleAssign = async () => {
     if (!selectedProject) return;
+    setLoading(true);
 
     const { error } = await supabase.functions.invoke("assign-project", {
       body: {
@@ -31,10 +39,23 @@ export const AssignProjectForm = ({ employeeId }: { employeeId: string }) => {
       },
     });
 
+    setLoading(false);
+
     if (error) {
       toast({ title: "Error assigning project", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Project Assigned", description: "Project successfully assigned." });
+      return;
+    }
+
+    toast({ title: "Project Assigned", description: "Project successfully assigned." });
+
+    // Call optional callback so caller can refresh and re-select employee
+    if (onAssigned) {
+      try {
+        await onAssigned();
+      } catch (err) {
+        // swallow - caller will handle errors if needed
+        console.error("onAssigned callback error:", err);
+      }
     }
   };
 
@@ -53,8 +74,8 @@ export const AssignProjectForm = ({ employeeId }: { employeeId: string }) => {
 
       <Input placeholder="Role in project (optional)" value={role} onChange={(e) => setRole(e.target.value)} />
 
-      <Button className="w-full" onClick={handleAssign}>
-        Assign Project
+      <Button className="w-full" onClick={handleAssign} disabled={loading}>
+        {loading ? "Assigning..." : "Assign Project"}
       </Button>
     </div>
   );

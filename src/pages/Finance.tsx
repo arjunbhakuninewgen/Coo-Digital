@@ -84,7 +84,6 @@ interface MonthlyBudget {
   >;
 }
 
-
 interface ClientPayment {
   id: string;
   client: string;
@@ -471,44 +470,44 @@ const Finance = () => {
       const newId = (data as any)[0].id;
 
       setMonthlyBudgetData((prev): MonthlyBudget[] => [
-  ...prev,
-  {
-    id: newId,
-    month,
-    year,
-    department, // ✅ Add this line
-    budgetedRevenue,
-    budgetedExpense,
-    actualRevenue: 0,
-    actualExpense: 0,
-    departments: {
-      maintenance: {
-        budgetedRevenue: 0,
-        budgetedExpense: 0,
-        actualRevenue: 0,
-        actualExpense: 0,
-      },
-      development: {
-        budgetedRevenue: 0,
-        budgetedExpense: 0,
-        actualRevenue: 0,
-        actualExpense: 0,
-      },
-      social: {
-        budgetedRevenue: 0,
-        budgetedExpense: 0,
-        actualRevenue: 0,
-        actualExpense: 0,
-      },
-      performance: {
-        budgetedRevenue: 0,
-        budgetedExpense: 0,
-        actualRevenue: 0,
-        actualExpense: 0,
-      },
-    },
-  },
-]);
+        ...prev,
+        {
+          id: newId,
+          month,
+          year,
+          department, // ✅ Add this line
+          budgetedRevenue,
+          budgetedExpense,
+          actualRevenue: 0,
+          actualExpense: 0,
+          departments: {
+            maintenance: {
+              budgetedRevenue: 0,
+              budgetedExpense: 0,
+              actualRevenue: 0,
+              actualExpense: 0,
+            },
+            development: {
+              budgetedRevenue: 0,
+              budgetedExpense: 0,
+              actualRevenue: 0,
+              actualExpense: 0,
+            },
+            social: {
+              budgetedRevenue: 0,
+              budgetedExpense: 0,
+              actualRevenue: 0,
+              actualExpense: 0,
+            },
+            performance: {
+              budgetedRevenue: 0,
+              budgetedExpense: 0,
+              actualRevenue: 0,
+              actualExpense: 0,
+            },
+          },
+        },
+      ]);
 
       setNewBudget({
         month: "",
@@ -551,8 +550,12 @@ const Finance = () => {
         ...prev,
         {
           id: (data as any)[0].id,
-          client: "", // you might need to re-fetch name
-          projectName: "",
+          client:
+            clients.find((c) => c.id === newPayment.client_id)?.name ??
+            "Unknown",
+          projectName:
+            projects.find((p) => p.id === newPayment.project_id)?.name ??
+            "Unknown",
           amount: newPayment.amount,
           dueDate: newPayment.due_date,
           status: newPayment.status,
@@ -830,37 +833,51 @@ const Finance = () => {
               <CardContent>
                 <div className="overflow-x-auto">
                   <Table>
-                   <TableHeader>
-  <TableRow>
-    <TableHead>Month-Year</TableHead>
-    <TableHead>Department</TableHead> {/* ✅ Added */}
-    <TableHead>Budgeted Revenue</TableHead>
-    <TableHead>Actual Revenue</TableHead>
-    <TableHead>Budgeted Expense</TableHead>
-    <TableHead>Actual Expense</TableHead>
-    <TableHead>Actions</TableHead>
-  </TableRow>
-</TableHeader>
-<TableBody>
-  {monthlyBudgetData.map((b) => (
-    <TableRow key={b.id}>
-      <TableCell className="font-medium">
-        {b.month}-{b.year}
-      </TableCell>
-      <TableCell className="capitalize">{b.department}</TableCell> {/* ✅ Added */}
-      <TableCell>{formatCurrency(b.budgetedRevenue)}</TableCell>
-      <TableCell>{formatCurrency(b.actualRevenue)}</TableCell>
-      <TableCell>{formatCurrency(b.budgetedExpense)}</TableCell>
-      <TableCell>{formatCurrency(b.actualExpense)}</TableCell>
-      <TableCell>
-        <Button variant="ghost" size="sm" onClick={() => handleEditBudget(b)}>
-          <Edit className="h-4 w-4" />
-        </Button>
-      </TableCell>
-    </TableRow>
-  ))}
-</TableBody>
-
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Month-Year</TableHead>
+                        <TableHead>Department</TableHead> {/* ✅ Added */}
+                        <TableHead>Budgeted Revenue</TableHead>
+                        <TableHead>Actual Revenue</TableHead>
+                        <TableHead>Budgeted Expense</TableHead>
+                        <TableHead>Actual Expense</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {monthlyBudgetData.map((b) => (
+                        <TableRow key={b.id}>
+                          <TableCell className="font-medium">
+                            {b.month}-{b.year}
+                          </TableCell>
+                          <TableCell className="capitalize">
+                            {b.department}
+                          </TableCell>{" "}
+                          {/* ✅ Added */}
+                          <TableCell>
+                            {formatCurrency(b.budgetedRevenue)}
+                          </TableCell>
+                          <TableCell>
+                            {formatCurrency(b.actualRevenue)}
+                          </TableCell>
+                          <TableCell>
+                            {formatCurrency(b.budgetedExpense)}
+                          </TableCell>
+                          <TableCell>
+                            {formatCurrency(b.actualExpense)}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditBudget(b)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
                   </Table>
                 </div>
               </CardContent>
@@ -870,108 +887,131 @@ const Finance = () => {
 
         {/* Edit Budget Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-  <DialogContent className="sm:max-w-[550px]">
-    <DialogHeader>
-      <DialogTitle>
-        Edit Budget for {editingBudget?.month}-{editingBudget?.year}
-      </DialogTitle>
-      <DialogDescription>Modify department and actuals</DialogDescription>
-    </DialogHeader>
+          <DialogContent className="sm:max-w-[550px]">
+            <DialogHeader>
+              <DialogTitle>
+                Edit Budget for {editingBudget?.month}-{editingBudget?.year}
+              </DialogTitle>
+              <DialogDescription>
+                Modify department and actuals
+              </DialogDescription>
+            </DialogHeader>
 
-    {editingBudget && (
-      <div className="grid gap-4 py-4">
-        {/* Department */}
-        <div className="grid gap-2">
-          <label className="text-sm font-medium">Department</label>
-          <Select
-            value={editingBudget.department}
-            onValueChange={(value) =>
-              setEditingBudget((prev) =>
-                prev ? { ...prev, department: value as Department } : prev
-              )
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select Department" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="maintenance">Maintenance</SelectItem>
-              <SelectItem value="development">Development</SelectItem>
-              <SelectItem value="social">Social</SelectItem>
-              <SelectItem value="performance">Performance</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+            {editingBudget && (
+              <div className="grid gap-4 py-4">
+                {/* Department */}
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">Department</label>
+                  <Select
+                    value={editingBudget.department}
+                    onValueChange={(value) =>
+                      setEditingBudget((prev) =>
+                        prev
+                          ? { ...prev, department: value as Department }
+                          : prev
+                      )
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="maintenance">Maintenance</SelectItem>
+                      <SelectItem value="development">Development</SelectItem>
+                      <SelectItem value="social">Social</SelectItem>
+                      <SelectItem value="performance">Performance</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-        {/* Budgeted & Actual Fields */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
-            <label className="text-sm font-medium">Budgeted Revenue</label>
-            <Input
-              type="number"
-              value={editingBudget.budgetedRevenue}
-              onChange={(e) =>
-                setEditingBudget((prev) =>
-                  prev ? { ...prev, budgetedRevenue: +e.target.value } : prev
-                )
-              }
-            />
-          </div>
+                {/* Budgeted & Actual Fields */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">
+                      Budgeted Revenue
+                    </label>
+                    <Input
+                      type="number"
+                      value={editingBudget.budgetedRevenue}
+                      onChange={(e) =>
+                        setEditingBudget((prev) =>
+                          prev
+                            ? { ...prev, budgetedRevenue: +e.target.value }
+                            : prev
+                        )
+                      }
+                    />
+                  </div>
 
-          <div className="grid gap-2">
-            <label className="text-sm font-medium">Budgeted Expense</label>
-            <Input
-              type="number"
-              value={editingBudget.budgetedExpense}
-              onChange={(e) =>
-                setEditingBudget((prev) =>
-                  prev ? { ...prev, budgetedExpense: +e.target.value } : prev
-                )
-              }
-            />
-          </div>
-        </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">
+                      Budgeted Expense
+                    </label>
+                    <Input
+                      type="number"
+                      value={editingBudget.budgetedExpense}
+                      onChange={(e) =>
+                        setEditingBudget((prev) =>
+                          prev
+                            ? { ...prev, budgetedExpense: +e.target.value }
+                            : prev
+                        )
+                      }
+                    />
+                  </div>
+                </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
-            <label className="text-sm font-medium">Actual Revenue</label>
-            <Input
-              type="number"
-              value={editingBudget.actualRevenue}
-              onChange={(e) =>
-                setEditingBudget((prev) =>
-                  prev ? { ...prev, actualRevenue: +e.target.value } : prev
-                )
-              }
-            />
-          </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">
+                      Actual Revenue
+                    </label>
+                    <Input
+                      type="number"
+                      value={editingBudget.actualRevenue}
+                      onChange={(e) =>
+                        setEditingBudget((prev) =>
+                          prev
+                            ? { ...prev, actualRevenue: +e.target.value }
+                            : prev
+                        )
+                      }
+                    />
+                  </div>
 
-          <div className="grid gap-2">
-            <label className="text-sm font-medium">Actual Expense</label>
-            <Input
-              type="number"
-              value={editingBudget.actualExpense}
-              onChange={(e) =>
-                setEditingBudget((prev) =>
-                  prev ? { ...prev, actualExpense: +e.target.value } : prev
-                )
-              }
-            />
-          </div>
-        </div>
-      </div>
-    )}
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">
+                      Actual Expense
+                    </label>
+                    <Input
+                      type="number"
+                      value={editingBudget.actualExpense}
+                      onChange={(e) =>
+                        setEditingBudget((prev) =>
+                          prev
+                            ? { ...prev, actualExpense: +e.target.value }
+                            : prev
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
-    <DialogFooter>
-      <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-        <X className="h-4 w-4 mr-2" /> Cancel
-      </Button>
-      <Button onClick={handleSaveBudget}>
-        <Save className="h-4 w-4 mr-2" /> Save Changes
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsEditDialogOpen(false)}
+              >
+                <X className="h-4 w-4 mr-2" /> Cancel
+              </Button>
+              <Button onClick={handleSaveBudget}>
+                <Save className="h-4 w-4 mr-2" /> Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Add Budget Dialog */}
         <Dialog open={isAddBudgetOpen} onOpenChange={setIsAddBudgetOpen}>

@@ -118,7 +118,7 @@ const Employees = () => {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const { toast } = useToast();
-  const { employees, loading, error, addEmployee, editEmployee } =
+  const { employees, loading, error, addEmployee, editEmployee,fetchEmployees} =
     useEmployees();
 
   // React Hook Form
@@ -800,21 +800,30 @@ const Employees = () => {
                       </div>
 
                       <Dialog>
-                        <DialogTrigger asChild>
-                          <Button size="sm">Add Project</Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Assign Project</DialogTitle>
-                            <DialogDescription>
-                              Choose a project to assign to{" "}
-                              {selectedEmployee.name}.
-                            </DialogDescription>
-                          </DialogHeader>
+  <DialogTrigger asChild>
+    <Button size="sm">Add Project</Button>
+  </DialogTrigger>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Assign Project</DialogTitle>
+      <DialogDescription>
+        Choose a project to assign to {selectedEmployee.name}.
+      </DialogDescription>
+    </DialogHeader>
 
-                          <AssignProjectForm employeeId={selectedEmployee.id} />
-                        </DialogContent>
-                      </Dialog>
+ <AssignProjectForm
+  employeeId={selectedEmployee.id}
+  onAssigned={async () => {
+    // fetch and use returned fresh list immediately
+    const fresh = await fetchEmployees();
+    const refreshed = fresh.find((e) => e.id === selectedEmployee.id);
+    if (refreshed) setSelectedEmployee(refreshed);
+  }}
+/>
+
+  </DialogContent>
+</Dialog>
+
                     </div>
                   </CardHeader>
 

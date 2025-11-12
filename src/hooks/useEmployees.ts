@@ -28,12 +28,6 @@ export const useEmployees = () => {
       setLoading(true);
       setError(null);
 
-      // Select employees and join profile + employee_projects -> projects
-      // This assumes:
-      // - profiles table is related via employees.id -> profiles.id
-      // - employee_projects has project_id foreign key to projects
-      // Supabase PostgREST allows relationship selects like:
-      // employee_projects(projects(id,name))
       const { data, error } = await supabase
         .from("employees")
         .select(
@@ -53,14 +47,12 @@ export const useEmployees = () => {
       if (error) throw error;
 
       const formatted = (data || []).map((emp: any) => {
-        // map employee_projects -> projects array
         const projects =
           (emp.employee_projects || [])
             .map((ep: any) => ep?.projects)
             .filter(Boolean)
             .map((p: any) => ({ id: String(p.id), name: String(p.name) })) || [];
 
-        // fallback name/email coming from joined profile record
         const profile = emp.profiles ?? emp.profile ?? null;
 
         return {
@@ -81,9 +73,11 @@ export const useEmployees = () => {
       });
 
       setEmployees(formatted);
+      return formatted; // <-- IMPORTANT: return the fresh array
     } catch (err: any) {
       setError(err?.message ?? "Failed to load employees");
       console.error("fetchEmployees error:", err);
+      return []; // return fallback so callers can rely on the return type
     } finally {
       setLoading(false);
     }
@@ -160,5 +154,5 @@ export const useEmployees = () => {
     // Optionally subscribe to realtime updates here in future
   }, []);
 
-  return { employees, loading, error, addEmployee, editEmployee, fetchEmployees };
+  return { employees, loading, error, addEmployee, editEmployee, fetchEmployees};
 };
